@@ -2,6 +2,7 @@ import puppeteer from "puppeteer";
 import { Resend } from "resend";
 import fs from "fs";
 import "dotenv/config";
+const FLAG_PATH = "/app/data/sent.flag";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -9,10 +10,11 @@ const URL = "https://bwuexam.in/result-panel";
 const TO_EMAIL = "biplabroy.work@gmail.com";
 const FROM_EMAIL = "Result Bot <onboarding@resend.dev>"; // test sender
 
-(async () => {
+async function checkResult() {
   const browser = await puppeteer.launch({
-    headless: false,
-    defaultViewport: null
+    headless: true,
+    defaultViewport: null,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
 
   const page = await browser.newPage();
@@ -59,6 +61,15 @@ const FROM_EMAIL = "Result Bot <onboarding@resend.dev>"; // test sender
     return;
   }
 
+  if (fs.existsSync(FLAG_PATH)) {
+    console.log("📭 Email already sent. Skipping.");
+    await browser.close();
+    return;
+  }
+
+
+  fs.writeFileSync(FLAG_PATH, "sent");
+
   // ───── Take FULL screenshot ─────
   const screenshotPath = "result-full.png";
   await page.screenshot({
@@ -88,5 +99,22 @@ const FROM_EMAIL = "Result Bot <onboarding@resend.dev>"; // test sender
 
   console.log("📧 Email sent with screenshot");
 
+
   await browser.close();
+}
+
+
+(async () => {
+  while (true) {
+    console.log("⏰ Running result check at", new Date().toISOString());
+
+    try {
+      await checkResult();
+    } catch (err) {
+      console.error("❌ Error:", err.message);
+    }
+
+    // sleep 1 hour
+    await new Promise(r => setTimeout(r, 60 * 60 * 1000));
+  }
 })();
